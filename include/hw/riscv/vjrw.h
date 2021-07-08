@@ -1,7 +1,7 @@
 /*
- * QEMU RISC-V VirtIO machine interface
+ * QEMU RISC-V VjrwIO machine interface (with extra UARTs)
  *
- * Copyright (c) 2017 SiFive, Inc.
+ * Copyright (c) 2017 SiFive, Inc. (mods by John Winans to add UARTs)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -16,16 +16,16 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HW_RISCV_VIRT_H
-#define HW_RISCV_VIRT_H
+#ifndef HW_RISCV_VJRW_H
+#define HW_RISCV_VJRW_H
 
 #include "hw/riscv/riscv_hart.h"
 #include "hw/sysbus.h"
 #include "hw/block/flash.h"
 
-#define TYPE_RISCV_VIRT_MACHINE MACHINE_TYPE_NAME("virt")
-#define RISCV_VIRT_MACHINE(obj) \
-    OBJECT_CHECK(RISCVVirtState, (obj), TYPE_RISCV_VIRT_MACHINE)
+#define TYPE_RISCV_VJRW_MACHINE MACHINE_TYPE_NAME("vjrw")
+#define RISCV_VJRW_MACHINE(obj) \
+    OBJECT_CHECK(RISCVVjrwState, (obj), TYPE_RISCV_VJRW_MACHINE)
 
 typedef struct {
     /*< private >*/
@@ -38,42 +38,48 @@ typedef struct {
 
     void *fdt;
     int fdt_size;
-} RISCVVirtState;
+} RISCVVjrwState;
 
 enum {
-    VIRT_DEBUG,
-    VIRT_MROM,
-    VIRT_TEST,
-    VIRT_RTC,
-    VIRT_CLINT,
-    VIRT_PLIC,
-    VIRT_UART0,
-    VIRT_VIRTIO,
-    VIRT_FLASH,
-    VIRT_DRAM,
-    VIRT_PCIE_MMIO,
-    VIRT_PCIE_PIO,
-    VIRT_PCIE_ECAM
+    VJRW_DEBUG,
+    VJRW_MROM,
+    VJRW_TEST,
+    VJRW_RTC,
+    VJRW_CLINT,
+    VJRW_PLIC,
+    VJRW_UART0,
+    VJRW_UART1,
+    VJRW_UART2,
+    VJRW_UART3,
+    VJRW_VJRWIO,
+    VJRW_FLASH,
+    VJRW_DRAM,
+    VJRW_PCIE_MMIO,
+    VJRW_PCIE_PIO,
+    VJRW_PCIE_ECAM
 };
 
 enum {
     UART0_IRQ = 10,
+    UART1_IRQ = 12,
+    UART2_IRQ = 13,
+    UART3_IRQ = 14,
     RTC_IRQ = 11,
-    VIRTIO_IRQ = 1, /* 1 to 8 */
-    VIRTIO_COUNT = 8,
+    VJRWIO_IRQ = 1, /* 1 to 8 */
+    VJRWIO_COUNT = 8,
     PCIE_IRQ = 0x20, /* 32 to 35 */
-    VIRTIO_NDEV = 0x35 /* Arbitrary maximum number of interrupts */
+    VJRWIO_NDEV = 0x35 /* Arbitrary maximum number of interrupts */
 };
 
-#define VIRT_PLIC_HART_CONFIG "MS"
-#define VIRT_PLIC_NUM_SOURCES 127
-#define VIRT_PLIC_NUM_PRIORITIES 7
-#define VIRT_PLIC_PRIORITY_BASE 0x04
-#define VIRT_PLIC_PENDING_BASE 0x1000
-#define VIRT_PLIC_ENABLE_BASE 0x2000
-#define VIRT_PLIC_ENABLE_STRIDE 0x80
-#define VIRT_PLIC_CONTEXT_BASE 0x200000
-#define VIRT_PLIC_CONTEXT_STRIDE 0x1000
+#define VJRW_PLIC_HART_CONFIG "MS"
+#define VJRW_PLIC_NUM_SOURCES 127
+#define VJRW_PLIC_NUM_PRIORITIES 7
+#define VJRW_PLIC_PRIORITY_BASE 0x04
+#define VJRW_PLIC_PENDING_BASE 0x1000
+#define VJRW_PLIC_ENABLE_BASE 0x2000
+#define VJRW_PLIC_ENABLE_STRIDE 0x80
+#define VJRW_PLIC_CONTEXT_BASE 0x200000
+#define VJRW_PLIC_CONTEXT_STRIDE 0x1000
 
 #define FDT_PCI_ADDR_CELLS    3
 #define FDT_PCI_INT_CELLS     1
@@ -83,9 +89,9 @@ enum {
                                FDT_PLIC_ADDR_CELLS + FDT_PLIC_INT_CELLS)
 
 #if defined(TARGET_RISCV32)
-#define VIRT_CPU TYPE_RISCV_CPU_BASE32
+#define VJRW_CPU TYPE_RISCV_CPU_BASE32
 #elif defined(TARGET_RISCV64)
-#define VIRT_CPU TYPE_RISCV_CPU_BASE64
+#define VJRW_CPU TYPE_RISCV_CPU_BASE64
 #endif
 
 #endif

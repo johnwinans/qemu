@@ -1,9 +1,9 @@
 /*
- * QEMU RISC-V VirtIO Board
+ * QEMU RISC-V VjrwIO Board
  *
  * Copyright (c) 2017 SiFive, Inc.
  *
- * RISC-V machine with 16550a UART and VirtIO MMIO
+ * RISC-V machine with 16550a UART and VjrwIO MMIO
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -33,7 +33,7 @@
 #include "hw/riscv/sifive_plic.h"
 #include "hw/riscv/sifive_clint.h"
 #include "hw/riscv/sifive_test.h"
-#include "hw/riscv/virt.h"
+#include "hw/riscv/vjrw.h"
 #include "hw/riscv/boot.h"
 #include "chardev/char.h"
 #include "sysemu/arch_init.h"
@@ -54,25 +54,28 @@
 static const struct MemmapEntry {
     hwaddr base;
     hwaddr size;
-} virt_memmap[] = {
-    [VIRT_DEBUG] =       {        0x0,         0x100 },
-    [VIRT_MROM] =        {     0x1000,       0x11000 },
-    [VIRT_TEST] =        {   0x100000,        0x1000 },
-    [VIRT_RTC] =         {   0x101000,        0x1000 },
-    [VIRT_CLINT] =       {  0x2000000,       0x10000 },
-    [VIRT_PLIC] =        {  0xc000000,     0x4000000 },
-    [VIRT_UART0] =       { 0x10000000,         0x100 },
-    [VIRT_VIRTIO] =      { 0x10001000,        0x1000 },
-    [VIRT_FLASH] =       { 0x20000000,     0x4000000 },
-    [VIRT_DRAM] =        { 0x80000000,           0x0 },
-    [VIRT_PCIE_MMIO] =   { 0x40000000,    0x40000000 },
-    [VIRT_PCIE_PIO] =    { 0x03000000,    0x00010000 },
-    [VIRT_PCIE_ECAM] =   { 0x30000000,    0x10000000 },
+} vjrw_memmap[] = {
+    [VJRW_DEBUG] =       {        0x0,         0x100 },
+    [VJRW_MROM] =        {     0x1000,       0x11000 },
+    [VJRW_TEST] =        {   0x100000,        0x1000 },
+    [VJRW_RTC] =         {   0x101000,        0x1000 },
+    [VJRW_CLINT] =       {  0x2000000,       0x10000 },
+    [VJRW_PLIC] =        {  0xc000000,     0x4000000 },
+    [VJRW_UART0] =       { 0x10000000,         0x100 },
+    [VJRW_UART1] =       { 0x10000100,         0x100 },
+    [VJRW_UART2] =       { 0x10000200,         0x100 },
+    [VJRW_UART3] =       { 0x10000300,         0x100 },
+    [VJRW_VJRWIO] =      { 0x10001000,        0x1000 },
+    [VJRW_FLASH] =       { 0x20000000,     0x4000000 },
+    [VJRW_DRAM] =        { 0x80000000,           0x0 },
+    [VJRW_PCIE_MMIO] =   { 0x40000000,    0x40000000 },
+    [VJRW_PCIE_PIO] =    { 0x03000000,    0x00010000 },
+    [VJRW_PCIE_ECAM] =   { 0x30000000,    0x10000000 },
 };
 
-#define VIRT_FLASH_SECTOR_SIZE (256 * KiB)
+#define VJRW_FLASH_SECTOR_SIZE (256 * KiB)
 
-static PFlashCFI01 *virt_flash_create1(RISCVVirtState *s,
+static PFlashCFI01 *vjrw_flash_create1(RISCVVjrwState *s,
                                        const char *name,
                                        const char *alias_prop_name)
 {
@@ -82,7 +85,7 @@ static PFlashCFI01 *virt_flash_create1(RISCVVirtState *s,
      */
     DeviceState *dev = qdev_create(NULL, TYPE_PFLASH_CFI01);
 
-    qdev_prop_set_uint64(dev, "sector-length", VIRT_FLASH_SECTOR_SIZE);
+    qdev_prop_set_uint64(dev, "sector-length", VJRW_FLASH_SECTOR_SIZE);
     qdev_prop_set_uint8(dev, "width", 4);
     qdev_prop_set_uint8(dev, "device-width", 2);
     qdev_prop_set_bit(dev, "big-endian", false);
@@ -100,21 +103,21 @@ static PFlashCFI01 *virt_flash_create1(RISCVVirtState *s,
     return PFLASH_CFI01(dev);
 }
 
-static void virt_flash_create(RISCVVirtState *s)
+static void vjrw_flash_create(RISCVVjrwState *s)
 {
-    s->flash[0] = virt_flash_create1(s, "virt.flash0", "pflash0");
-    s->flash[1] = virt_flash_create1(s, "virt.flash1", "pflash1");
+    s->flash[0] = vjrw_flash_create1(s, "virt.flash0", "pflash0");
+    s->flash[1] = vjrw_flash_create1(s, "virt.flash1", "pflash1");
 }
 
-static void virt_flash_map1(PFlashCFI01 *flash,
+static void vjrw_flash_map1(PFlashCFI01 *flash,
                             hwaddr base, hwaddr size,
                             MemoryRegion *sysmem)
 {
     DeviceState *dev = DEVICE(flash);
 
-    assert(size % VIRT_FLASH_SECTOR_SIZE == 0);
-    assert(size / VIRT_FLASH_SECTOR_SIZE <= UINT32_MAX);
-    qdev_prop_set_uint32(dev, "num-blocks", size / VIRT_FLASH_SECTOR_SIZE);
+    assert(size % VJRW_FLASH_SECTOR_SIZE == 0);
+    assert(size / VJRW_FLASH_SECTOR_SIZE <= UINT32_MAX);
+    qdev_prop_set_uint32(dev, "num-blocks", size / VJRW_FLASH_SECTOR_SIZE);
     qdev_init_nofail(dev);
 
     memory_region_add_subregion(sysmem, base,
@@ -122,15 +125,15 @@ static void virt_flash_map1(PFlashCFI01 *flash,
                                                        0));
 }
 
-static void virt_flash_map(RISCVVirtState *s,
+static void vjrw_flash_map(RISCVVjrwState *s,
                            MemoryRegion *sysmem)
 {
-    hwaddr flashsize = virt_memmap[VIRT_FLASH].size / 2;
-    hwaddr flashbase = virt_memmap[VIRT_FLASH].base;
+    hwaddr flashsize = vjrw_memmap[VJRW_FLASH].size / 2;
+    hwaddr flashbase = vjrw_memmap[VJRW_FLASH].base;
 
-    virt_flash_map1(s->flash[0], flashbase, flashsize,
+    vjrw_flash_map1(s->flash[0], flashbase, flashsize,
                     sysmem);
-    virt_flash_map1(s->flash[1], flashbase + flashsize, flashsize,
+    vjrw_flash_map1(s->flash[1], flashbase + flashsize, flashsize,
                     sysmem);
 }
 
@@ -179,7 +182,7 @@ static void create_pcie_irq_map(void *fdt, char *nodename,
                            0x1800, 0, 0, 0x7);
 }
 
-static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
+static void create_fdt(RISCVVjrwState *s, const struct MemmapEntry *memmap,
     uint64_t mem_size, const char *cmdline)
 {
     void *fdt;
@@ -187,8 +190,8 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     uint32_t *cells;
     char *nodename;
     uint32_t plic_phandle, test_phandle, phandle = 1;
-    hwaddr flashsize = virt_memmap[VIRT_FLASH].size / 2;
-    hwaddr flashbase = virt_memmap[VIRT_FLASH].base;
+    hwaddr flashsize = vjrw_memmap[VJRW_FLASH].size / 2;
+    hwaddr flashbase = vjrw_memmap[VJRW_FLASH].base;
 
     fdt = s->fdt = create_device_tree(&s->fdt_size);
     if (!fdt) {
@@ -208,10 +211,10 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     qemu_fdt_setprop_cell(fdt, "/soc", "#address-cells", 0x2);
 
     nodename = g_strdup_printf("/memory@%lx",
-        (long)memmap[VIRT_DRAM].base);
+        (long)memmap[VJRW_DRAM].base);
     qemu_fdt_add_subnode(fdt, nodename);
     qemu_fdt_setprop_cells(fdt, nodename, "reg",
-        memmap[VIRT_DRAM].base >> 32, memmap[VIRT_DRAM].base,
+        memmap[VJRW_DRAM].base >> 32, memmap[VJRW_DRAM].base,
         mem_size >> 32, mem_size);
     qemu_fdt_setprop_string(fdt, nodename, "device_type", "memory");
     g_free(nodename);
@@ -273,12 +276,12 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
         g_free(nodename);
     }
     nodename = g_strdup_printf("/soc/clint@%lx",
-        (long)memmap[VIRT_CLINT].base);
+        (long)memmap[VJRW_CLINT].base);
     qemu_fdt_add_subnode(fdt, nodename);
     qemu_fdt_setprop_string(fdt, nodename, "compatible", "riscv,clint0");
     qemu_fdt_setprop_cells(fdt, nodename, "reg",
-        0x0, memmap[VIRT_CLINT].base,
-        0x0, memmap[VIRT_CLINT].size);
+        0x0, memmap[VJRW_CLINT].base,
+        0x0, memmap[VJRW_CLINT].size);
     qemu_fdt_setprop(fdt, nodename, "interrupts-extended",
         cells, s->soc.num_harts * sizeof(uint32_t) * 4);
     g_free(cells);
@@ -297,7 +300,7 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
         g_free(nodename);
     }
     nodename = g_strdup_printf("/soc/interrupt-controller@%lx",
-        (long)memmap[VIRT_PLIC].base);
+        (long)memmap[VJRW_PLIC].base);
     qemu_fdt_add_subnode(fdt, nodename);
     qemu_fdt_setprop_cell(fdt, nodename, "#address-cells",
                           FDT_PLIC_ADDR_CELLS);
@@ -308,29 +311,29 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     qemu_fdt_setprop(fdt, nodename, "interrupts-extended",
         cells, s->soc.num_harts * sizeof(uint32_t) * 4);
     qemu_fdt_setprop_cells(fdt, nodename, "reg",
-        0x0, memmap[VIRT_PLIC].base,
-        0x0, memmap[VIRT_PLIC].size);
-    qemu_fdt_setprop_cell(fdt, nodename, "riscv,ndev", VIRTIO_NDEV);
+        0x0, memmap[VJRW_PLIC].base,
+        0x0, memmap[VJRW_PLIC].size);
+    qemu_fdt_setprop_cell(fdt, nodename, "riscv,ndev", VJRWIO_NDEV);
     qemu_fdt_setprop_cell(fdt, nodename, "phandle", plic_phandle);
     plic_phandle = qemu_fdt_get_phandle(fdt, nodename);
     g_free(cells);
     g_free(nodename);
 
-    for (i = 0; i < VIRTIO_COUNT; i++) {
+    for (i = 0; i < VJRWIO_COUNT; i++) {
         nodename = g_strdup_printf("/virtio_mmio@%lx",
-            (long)(memmap[VIRT_VIRTIO].base + i * memmap[VIRT_VIRTIO].size));
+            (long)(memmap[VJRW_VJRWIO].base + i * memmap[VJRW_VJRWIO].size));
         qemu_fdt_add_subnode(fdt, nodename);
         qemu_fdt_setprop_string(fdt, nodename, "compatible", "virtio,mmio");
         qemu_fdt_setprop_cells(fdt, nodename, "reg",
-            0x0, memmap[VIRT_VIRTIO].base + i * memmap[VIRT_VIRTIO].size,
-            0x0, memmap[VIRT_VIRTIO].size);
+            0x0, memmap[VJRW_VJRWIO].base + i * memmap[VJRW_VJRWIO].size,
+            0x0, memmap[VJRW_VJRWIO].size);
         qemu_fdt_setprop_cell(fdt, nodename, "interrupt-parent", plic_phandle);
-        qemu_fdt_setprop_cell(fdt, nodename, "interrupts", VIRTIO_IRQ + i);
+        qemu_fdt_setprop_cell(fdt, nodename, "interrupts", VJRWIO_IRQ + i);
         g_free(nodename);
     }
 
     nodename = g_strdup_printf("/soc/pci@%lx",
-        (long) memmap[VIRT_PCIE_ECAM].base);
+        (long) memmap[VJRW_PCIE_ECAM].base);
     qemu_fdt_add_subnode(fdt, nodename);
     qemu_fdt_setprop_cell(fdt, nodename, "#address-cells",
                           FDT_PCI_ADDR_CELLS);
@@ -342,31 +345,31 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     qemu_fdt_setprop_string(fdt, nodename, "device_type", "pci");
     qemu_fdt_setprop_cell(fdt, nodename, "linux,pci-domain", 0);
     qemu_fdt_setprop_cells(fdt, nodename, "bus-range", 0,
-                           memmap[VIRT_PCIE_ECAM].size /
+                           memmap[VJRW_PCIE_ECAM].size /
                                PCIE_MMCFG_SIZE_MIN - 1);
     qemu_fdt_setprop(fdt, nodename, "dma-coherent", NULL, 0);
-    qemu_fdt_setprop_cells(fdt, nodename, "reg", 0, memmap[VIRT_PCIE_ECAM].base,
-                           0, memmap[VIRT_PCIE_ECAM].size);
+    qemu_fdt_setprop_cells(fdt, nodename, "reg", 0, memmap[VJRW_PCIE_ECAM].base,
+                           0, memmap[VJRW_PCIE_ECAM].size);
     qemu_fdt_setprop_sized_cells(fdt, nodename, "ranges",
         1, FDT_PCI_RANGE_IOPORT, 2, 0,
-        2, memmap[VIRT_PCIE_PIO].base, 2, memmap[VIRT_PCIE_PIO].size,
+        2, memmap[VJRW_PCIE_PIO].base, 2, memmap[VJRW_PCIE_PIO].size,
         1, FDT_PCI_RANGE_MMIO,
-        2, memmap[VIRT_PCIE_MMIO].base,
-        2, memmap[VIRT_PCIE_MMIO].base, 2, memmap[VIRT_PCIE_MMIO].size);
+        2, memmap[VJRW_PCIE_MMIO].base,
+        2, memmap[VJRW_PCIE_MMIO].base, 2, memmap[VJRW_PCIE_MMIO].size);
     create_pcie_irq_map(fdt, nodename, plic_phandle);
     g_free(nodename);
 
     test_phandle = phandle++;
     nodename = g_strdup_printf("/test@%lx",
-        (long)memmap[VIRT_TEST].base);
+        (long)memmap[VJRW_TEST].base);
     qemu_fdt_add_subnode(fdt, nodename);
     {
         const char compat[] = "sifive,test1\0sifive,test0\0syscon";
         qemu_fdt_setprop(fdt, nodename, "compatible", compat, sizeof(compat));
     }
     qemu_fdt_setprop_cells(fdt, nodename, "reg",
-        0x0, memmap[VIRT_TEST].base,
-        0x0, memmap[VIRT_TEST].size);
+        0x0, memmap[VJRW_TEST].base,
+        0x0, memmap[VJRW_TEST].size);
     qemu_fdt_setprop_cell(fdt, nodename, "phandle", test_phandle);
     test_phandle = qemu_fdt_get_phandle(fdt, nodename);
     g_free(nodename);
@@ -387,16 +390,53 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     qemu_fdt_setprop_cell(fdt, nodename, "value", FINISHER_PASS);
     g_free(nodename);
 
+
     nodename = g_strdup_printf("/uart@%lx",
-        (long)memmap[VIRT_UART0].base);
+        (long)memmap[VJRW_UART0].base);
     qemu_fdt_add_subnode(fdt, nodename);
     qemu_fdt_setprop_string(fdt, nodename, "compatible", "ns16550a");
     qemu_fdt_setprop_cells(fdt, nodename, "reg",
-        0x0, memmap[VIRT_UART0].base,
-        0x0, memmap[VIRT_UART0].size);
+        0x0, memmap[VJRW_UART0].base,
+        0x0, memmap[VJRW_UART0].size);
     qemu_fdt_setprop_cell(fdt, nodename, "clock-frequency", 3686400);
     qemu_fdt_setprop_cell(fdt, nodename, "interrupt-parent", plic_phandle);
     qemu_fdt_setprop_cell(fdt, nodename, "interrupts", UART0_IRQ);
+
+    nodename = g_strdup_printf("/uart@%lx",
+        (long)memmap[VJRW_UART1].base);
+    qemu_fdt_add_subnode(fdt, nodename);
+    qemu_fdt_setprop_string(fdt, nodename, "compatible", "ns16550a");
+    qemu_fdt_setprop_cells(fdt, nodename, "reg",
+        0x0, memmap[VJRW_UART1].base,
+        0x0, memmap[VJRW_UART1].size);
+    qemu_fdt_setprop_cell(fdt, nodename, "clock-frequency", 3686400);
+    qemu_fdt_setprop_cell(fdt, nodename, "interrupt-parent", plic_phandle);
+    qemu_fdt_setprop_cell(fdt, nodename, "interrupts", UART1_IRQ);
+
+    nodename = g_strdup_printf("/uart@%lx",
+        (long)memmap[VJRW_UART2].base);
+    qemu_fdt_add_subnode(fdt, nodename);
+    qemu_fdt_setprop_string(fdt, nodename, "compatible", "ns16550a");
+    qemu_fdt_setprop_cells(fdt, nodename, "reg",
+        0x0, memmap[VJRW_UART2].base,
+        0x0, memmap[VJRW_UART2].size);
+    qemu_fdt_setprop_cell(fdt, nodename, "clock-frequency", 3686400);
+    qemu_fdt_setprop_cell(fdt, nodename, "interrupt-parent", plic_phandle);
+    qemu_fdt_setprop_cell(fdt, nodename, "interrupts", UART2_IRQ);
+
+    nodename = g_strdup_printf("/uart@%lx",
+        (long)memmap[VJRW_UART3].base);
+    qemu_fdt_add_subnode(fdt, nodename);
+    qemu_fdt_setprop_string(fdt, nodename, "compatible", "ns16550a");
+    qemu_fdt_setprop_cells(fdt, nodename, "reg",
+        0x0, memmap[VJRW_UART3].base,
+        0x0, memmap[VJRW_UART3].size);
+    qemu_fdt_setprop_cell(fdt, nodename, "clock-frequency", 3686400);
+    qemu_fdt_setprop_cell(fdt, nodename, "interrupt-parent", plic_phandle);
+    qemu_fdt_setprop_cell(fdt, nodename, "interrupts", UART3_IRQ);
+
+
+
 
     qemu_fdt_add_subnode(fdt, "/chosen");
     qemu_fdt_setprop_string(fdt, "/chosen", "stdout-path", nodename);
@@ -406,13 +446,13 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     g_free(nodename);
 
     nodename = g_strdup_printf("/rtc@%lx",
-        (long)memmap[VIRT_RTC].base);
+        (long)memmap[VJRW_RTC].base);
     qemu_fdt_add_subnode(fdt, nodename);
     qemu_fdt_setprop_string(fdt, nodename, "compatible",
         "google,goldfish-rtc");
     qemu_fdt_setprop_cells(fdt, nodename, "reg",
-        0x0, memmap[VIRT_RTC].base,
-        0x0, memmap[VIRT_RTC].size);
+        0x0, memmap[VJRW_RTC].base,
+        0x0, memmap[VJRW_RTC].size);
     qemu_fdt_setprop_cell(fdt, nodename, "interrupt-parent", plic_phandle);
     qemu_fdt_setprop_cell(fdt, nodename, "interrupts", RTC_IRQ);
     g_free(nodename);
@@ -468,16 +508,16 @@ static inline DeviceState *gpex_pcie_init(MemoryRegion *sys_mem,
     return dev;
 }
 
-static void riscv_virt_board_init(MachineState *machine)
+static void riscv_vjrw_board_init(MachineState *machine)
 {
-    const struct MemmapEntry *memmap = virt_memmap;
-    RISCVVirtState *s = RISCV_VIRT_MACHINE(machine);
+    const struct MemmapEntry *memmap = vjrw_memmap;
+    RISCVVjrwState *s = RISCV_VJRW_MACHINE(machine);
     MemoryRegion *system_memory = get_system_memory();
     MemoryRegion *main_mem = g_new(MemoryRegion, 1);
     MemoryRegion *mask_rom = g_new(MemoryRegion, 1);
     char *plic_hart_config;
     size_t plic_hart_config_len;
-    target_ulong start_addr = memmap[VIRT_DRAM].base;
+    target_ulong start_addr = memmap[VJRW_DRAM].base;
     int i;
     unsigned int smp_cpus = machine->smp.cpus;
 
@@ -492,22 +532,22 @@ static void riscv_virt_board_init(MachineState *machine)
                             &error_abort);
 
     /* register system main memory (actual RAM) */
-    memory_region_init_ram(main_mem, NULL, "riscv_virt_board.ram",
+    memory_region_init_ram(main_mem, NULL, "riscv_vjrw_board.ram",
                            machine->ram_size, &error_fatal);
-    memory_region_add_subregion(system_memory, memmap[VIRT_DRAM].base,
+    memory_region_add_subregion(system_memory, memmap[VJRW_DRAM].base,
         main_mem);
 
     /* create device tree */
     create_fdt(s, memmap, machine->ram_size, machine->kernel_cmdline);
 
     /* boot rom */
-    memory_region_init_rom(mask_rom, NULL, "riscv_virt_board.mrom",
-                           memmap[VIRT_MROM].size, &error_fatal);
-    memory_region_add_subregion(system_memory, memmap[VIRT_MROM].base,
+    memory_region_init_rom(mask_rom, NULL, "riscv_vjrw_board.mrom",
+                           memmap[VJRW_MROM].size, &error_fatal);
+    memory_region_add_subregion(system_memory, memmap[VJRW_MROM].base,
                                 mask_rom);
 
     riscv_find_and_load_firmware(machine, BIOS_FILENAME,
-                                 memmap[VIRT_DRAM].base);
+                                 memmap[VJRW_DRAM].base);
 
     if (machine->kernel_filename) {
         uint64_t kernel_entry = riscv_load_kernel(machine->kernel_filename,
@@ -530,7 +570,7 @@ static void riscv_virt_board_init(MachineState *machine)
          * Pflash was supplied, let's overwrite the address we jump to after
          * reset to the base of the flash.
          */
-        start_addr = virt_memmap[VIRT_FLASH].base;
+        start_addr = vjrw_memmap[VJRW_FLASH].base;
     }
 
     /* reset vector */
@@ -555,106 +595,119 @@ static void riscv_virt_board_init(MachineState *machine)
         reset_vec[i] = cpu_to_le32(reset_vec[i]);
     }
     rom_add_blob_fixed_as("mrom.reset", reset_vec, sizeof(reset_vec),
-                          memmap[VIRT_MROM].base, &address_space_memory);
+                          memmap[VJRW_MROM].base, &address_space_memory);
 
     /* copy in the device tree */
     if (fdt_pack(s->fdt) || fdt_totalsize(s->fdt) >
-            memmap[VIRT_MROM].size - sizeof(reset_vec)) {
+            memmap[VJRW_MROM].size - sizeof(reset_vec)) {
         error_report("not enough space to store device-tree");
         exit(1);
     }
     qemu_fdt_dumpdtb(s->fdt, fdt_totalsize(s->fdt));
     rom_add_blob_fixed_as("mrom.fdt", s->fdt, fdt_totalsize(s->fdt),
-                          memmap[VIRT_MROM].base + sizeof(reset_vec),
+                          memmap[VJRW_MROM].base + sizeof(reset_vec),
                           &address_space_memory);
 
     /* create PLIC hart topology configuration string */
-    plic_hart_config_len = (strlen(VIRT_PLIC_HART_CONFIG) + 1) * smp_cpus;
+    plic_hart_config_len = (strlen(VJRW_PLIC_HART_CONFIG) + 1) * smp_cpus;
     plic_hart_config = g_malloc0(plic_hart_config_len);
     for (i = 0; i < smp_cpus; i++) {
         if (i != 0) {
             strncat(plic_hart_config, ",", plic_hart_config_len);
         }
-        strncat(plic_hart_config, VIRT_PLIC_HART_CONFIG, plic_hart_config_len);
-        plic_hart_config_len -= (strlen(VIRT_PLIC_HART_CONFIG) + 1);
+        strncat(plic_hart_config, VJRW_PLIC_HART_CONFIG, plic_hart_config_len);
+        plic_hart_config_len -= (strlen(VJRW_PLIC_HART_CONFIG) + 1);
     }
 
     /* MMIO */
-    s->plic = sifive_plic_create(memmap[VIRT_PLIC].base,
+    s->plic = sifive_plic_create(memmap[VJRW_PLIC].base,
         plic_hart_config,
-        VIRT_PLIC_NUM_SOURCES,
-        VIRT_PLIC_NUM_PRIORITIES,
-        VIRT_PLIC_PRIORITY_BASE,
-        VIRT_PLIC_PENDING_BASE,
-        VIRT_PLIC_ENABLE_BASE,
-        VIRT_PLIC_ENABLE_STRIDE,
-        VIRT_PLIC_CONTEXT_BASE,
-        VIRT_PLIC_CONTEXT_STRIDE,
-        memmap[VIRT_PLIC].size);
-    sifive_clint_create(memmap[VIRT_CLINT].base,
-        memmap[VIRT_CLINT].size, smp_cpus,
+        VJRW_PLIC_NUM_SOURCES,
+        VJRW_PLIC_NUM_PRIORITIES,
+        VJRW_PLIC_PRIORITY_BASE,
+        VJRW_PLIC_PENDING_BASE,
+        VJRW_PLIC_ENABLE_BASE,
+        VJRW_PLIC_ENABLE_STRIDE,
+        VJRW_PLIC_CONTEXT_BASE,
+        VJRW_PLIC_CONTEXT_STRIDE,
+        memmap[VJRW_PLIC].size);
+    sifive_clint_create(memmap[VJRW_CLINT].base,
+        memmap[VJRW_CLINT].size, smp_cpus,
         SIFIVE_SIP_BASE, SIFIVE_TIMECMP_BASE, SIFIVE_TIME_BASE, true);
-    sifive_test_create(memmap[VIRT_TEST].base);
+    sifive_test_create(memmap[VJRW_TEST].base);
 
-    for (i = 0; i < VIRTIO_COUNT; i++) {
+    for (i = 0; i < VJRWIO_COUNT; i++) {
         sysbus_create_simple("virtio-mmio",
-            memmap[VIRT_VIRTIO].base + i * memmap[VIRT_VIRTIO].size,
-            qdev_get_gpio_in(DEVICE(s->plic), VIRTIO_IRQ + i));
+            memmap[VJRW_VJRWIO].base + i * memmap[VJRW_VJRWIO].size,
+            qdev_get_gpio_in(DEVICE(s->plic), VJRWIO_IRQ + i));
     }
 
     gpex_pcie_init(system_memory,
-                         memmap[VIRT_PCIE_ECAM].base,
-                         memmap[VIRT_PCIE_ECAM].size,
-                         memmap[VIRT_PCIE_MMIO].base,
-                         memmap[VIRT_PCIE_MMIO].size,
-                         memmap[VIRT_PCIE_PIO].base,
+                         memmap[VJRW_PCIE_ECAM].base,
+                         memmap[VJRW_PCIE_ECAM].size,
+                         memmap[VJRW_PCIE_MMIO].base,
+                         memmap[VJRW_PCIE_MMIO].size,
+                         memmap[VJRW_PCIE_PIO].base,
                          DEVICE(s->plic), true);
 
-    serial_mm_init(system_memory, memmap[VIRT_UART0].base,
+    serial_mm_init(system_memory, memmap[VJRW_UART0].base,
         0, qdev_get_gpio_in(DEVICE(s->plic), UART0_IRQ), 399193,
         serial_hd(0), DEVICE_LITTLE_ENDIAN);
 
-    sysbus_create_simple("goldfish_rtc", memmap[VIRT_RTC].base,
+    serial_mm_init(system_memory, memmap[VJRW_UART1].base,
+        0, qdev_get_gpio_in(DEVICE(s->plic), UART1_IRQ), 399193,
+        serial_hd(1), DEVICE_LITTLE_ENDIAN);
+
+    serial_mm_init(system_memory, memmap[VJRW_UART2].base,
+        0, qdev_get_gpio_in(DEVICE(s->plic), UART2_IRQ), 399193,
+        serial_hd(2), DEVICE_LITTLE_ENDIAN);
+
+    serial_mm_init(system_memory, memmap[VJRW_UART3].base,
+        0, qdev_get_gpio_in(DEVICE(s->plic), UART3_IRQ), 399193,
+        serial_hd(3), DEVICE_LITTLE_ENDIAN);
+
+
+    sysbus_create_simple("goldfish_rtc", memmap[VJRW_RTC].base,
         qdev_get_gpio_in(DEVICE(s->plic), RTC_IRQ));
 
-    virt_flash_create(s);
+    vjrw_flash_create(s);
 
     for (i = 0; i < ARRAY_SIZE(s->flash); i++) {
         /* Map legacy -drive if=pflash to machine properties */
         pflash_cfi01_legacy_drive(s->flash[i],
                                   drive_get(IF_PFLASH, 0, i));
     }
-    virt_flash_map(s, system_memory);
+    vjrw_flash_map(s, system_memory);
 
     g_free(plic_hart_config);
 }
 
-static void riscv_virt_machine_instance_init(Object *obj)
+static void riscv_vjrw_machine_instance_init(Object *obj)
 {
 }
 
-static void riscv_virt_machine_class_init(ObjectClass *oc, void *data)
+static void riscv_vjrw_machine_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
 
-    mc->desc = "RISC-V VirtIO board";
-    mc->init = riscv_virt_board_init;
+    mc->desc = "RISC-V VjrwIO board";
+    mc->init = riscv_vjrw_board_init;
     mc->max_cpus = 8;
-    mc->default_cpu_type = VIRT_CPU;
+    mc->default_cpu_type = VJRW_CPU;
     mc->pci_allow_0_address = true;
 }
 
-static const TypeInfo riscv_virt_machine_typeinfo = {
-    .name       = MACHINE_TYPE_NAME("virt"),
+static const TypeInfo riscv_vjrw_machine_typeinfo = {
+    .name       = MACHINE_TYPE_NAME("vjrw"),
     .parent     = TYPE_MACHINE,
-    .class_init = riscv_virt_machine_class_init,
-    .instance_init = riscv_virt_machine_instance_init,
-    .instance_size = sizeof(RISCVVirtState),
+    .class_init = riscv_vjrw_machine_class_init,
+    .instance_init = riscv_vjrw_machine_instance_init,
+    .instance_size = sizeof(RISCVVjrwState),
 };
 
-static void riscv_virt_machine_init_register_types(void)
+static void riscv_vjrw_machine_init_register_types(void)
 {
-    type_register_static(&riscv_virt_machine_typeinfo);
+    type_register_static(&riscv_vjrw_machine_typeinfo);
 }
 
-type_init(riscv_virt_machine_init_register_types)
+type_init(riscv_vjrw_machine_init_register_types)
