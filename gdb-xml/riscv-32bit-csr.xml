@@ -227,7 +227,6 @@
   <reg name="tdata3" bitsize="32"/>
   <reg name="dcsr" bitsize="32"/>
   <reg name="dpc" bitsize="32"/>
-  <reg name="dscratch" bitsize="32"/>
   <reg name="hstatus" bitsize="32"/>
   <reg name="hedeleg" bitsize="32"/>
   <reg name="hideleg" bitsize="32"/>
@@ -244,7 +243,6 @@
   <reg name="mibound" bitsize="32"/>
   <reg name="mdbase" bitsize="32"/>
   <reg name="mdbound" bitsize="32"/>
-  <reg name="mucounteren" bitsize="32"/>
   <reg name="mscounteren" bitsize="32"/>
   <reg name="mhcounteren" bitsize="32"/>
 </feature>
